@@ -113,22 +113,38 @@ const detectors: Detector[] = [
 
   // --- PHP ---
   (root, cache) => {
-    if (!exists(root, "composer.json")) return [];
     const composer = readSafe(root, "composer.json", cache);
+    const lock = readSafe(root, "composer.lock", cache);
+    if (!composer && !lock && !exists(root, "artisan") && !exists(root, "wp-config.php")) return [];
     const tags: string[] = ["php"];
-    if (!composer) return tags;
     let parsed: Record<string, unknown> | null = null;
     try {
-      parsed = JSON.parse(composer) as Record<string, unknown>;
+      parsed = composer ? (JSON.parse(composer) as Record<string, unknown>) : null;
     } catch {
-      return tags;
+      // fall through — lockfile and artisan still apply
     }
     const deps = {
-      ...((parsed.require as Record<string, string>) ?? {}),
-      ...((parsed["require-dev"] as Record<string, string>) ?? {}),
+      ...((parsed?.require as Record<string, string>) ?? {}),
+      ...((parsed?.["require-dev"] as Record<string, string>) ?? {}),
     };
     const keys = Object.keys(deps);
-    if (keys.some((k) => k.startsWith("laravel/")) || exists(root, "artisan")) tags.push("laravel");
+    const has = (name: string) =>
+      keys.includes(name) ||
+      (!!lock && new RegExp(`"name"\\s*:\\s*"${name.replace(/[/-]/g, "\\$&")}"`).test(lock));
+
+    if (has("laravel/framework") || exists(root, "artisan")) {
+      tags.push("laravel");
+      if (has("livewire/livewire")) tags.push("livewire");
+      if (has("laravel/nova")) tags.push("nova");
+      if (has("inertiajs/inertia-laravel")) tags.push("inertia");
+      if (has("laravel/sanctum")) tags.push("sanctum");
+      if (has("laravel/passport")) tags.push("passport");
+      if (has("laravel/telescope")) tags.push("telescope");
+      if (has("laravel/horizon")) tags.push("horizon");
+      if (has("laravel/cashier") || has("laravel/cashier-paddle")) tags.push("cashier");
+      if (has("laravel/octane")) tags.push("octane");
+    }
+
     if (keys.some((k) => k.startsWith("symfony/"))) tags.push("symfony");
     if (keys.includes("slim/slim")) tags.push("slim");
     if (keys.some((k) => k === "yiisoft/yii2" || k.startsWith("yiisoft/"))) tags.push("yii");
@@ -393,6 +409,7 @@ export function detectTech(rootPath: string): DetectedTech {
   const COMMON_SENTINELS = [
     "package.json",
     "composer.json",
+    "composer.lock",
     "artisan",
     "pyproject.toml",
     "requirements.txt",

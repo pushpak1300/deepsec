@@ -7,6 +7,13 @@ import { jsExpressRouteMatcher } from "../matchers/js-express-route.js";
 import { jsFastifyRouteMatcher } from "../matchers/js-fastify-route.js";
 import { jsHonoRouteMatcher } from "../matchers/js-hono-route.js";
 import { jsNestjsControllerMatcher } from "../matchers/js-nestjs-controller.js";
+import { laravelBladeXssMatcher } from "../matchers/laravel-blade-xss.js";
+import { laravelConfigExposureMatcher } from "../matchers/laravel-config-exposure.js";
+import { laravelLivewireFilamentMatcher } from "../matchers/laravel-livewire-filament.js";
+import { laravelMassAssignmentMatcher } from "../matchers/laravel-mass-assignment.js";
+import { laravelMissingAuthorizationMatcher } from "../matchers/laravel-missing-authorization.js";
+import { laravelSqlRawMatcher } from "../matchers/laravel-sql-raw.js";
+import { laravelUnsafeSinksMatcher } from "../matchers/laravel-unsafe-sinks.js";
 import { phpLaravelRouteMatcher } from "../matchers/php-laravel-route.js";
 import { pyDjangoViewMatcher } from "../matchers/py-django-view.js";
 import { pyFastapiRouteMatcher } from "../matchers/py-fastapi-route.js";
@@ -231,5 +238,70 @@ func main() {
 `;
     const matches = goChiRouteMatcher.match(src, "cmd/server/main.go");
     expect(matches.length).toBeGreaterThan(0);
+  });
+});
+
+describe("laravel matchers (negative cases)", () => {
+  const F = "app/Http/Controllers/PostController.php";
+
+  it("mass-assignment ignores fillable and validated input", () => {
+    const src = `protected $fillable = ['name'];\nUser::create($request->validated());\n$u->update($request->only('name'));`;
+    expect(laravelMassAssignmentMatcher.match(src, "app/Models/User.php")).toEqual([]);
+  });
+
+  it("mass-assignment skips tests", () => {
+    expect(
+      laravelMassAssignmentMatcher.match("User::create($request->all());", "tests/Feature/X.php"),
+    ).toEqual([]);
+  });
+
+  it("sql-raw ignores bound parameters and static raw expressions", () => {
+    const src = `User::whereRaw('LOWER(email) = ?', [$email])->get();\nDB::raw('COUNT(*)');\n$q->orderBy('created_at');`;
+    expect(laravelSqlRawMatcher.match(src, F)).toEqual([]);
+  });
+
+  it("sql-raw skips migrations", () => {
+    expect(
+      laravelSqlRawMatcher.match('DB::statement("ALTER TABLE $t");', "database/migrations/x.php"),
+    ).toEqual([]);
+  });
+
+  it("blade-xss ignores escaped output and known-safe raw helpers", () => {
+    const src = `{{ $comment->body }}\n{!! json_encode($x) !!}\n{!! $slot !!}\n{!! csrf_field() !!}\n{!! Js::from($x) !!}`;
+    expect(laravelBladeXssMatcher.match(src, "resources/views/a.blade.php")).toEqual([]);
+  });
+
+  it("missing-authorization is quiet when the controller authorizes", () => {
+    const src = `class PostController extends Controller {\n  public function destroy(Post $post) {\n    $this->authorize('delete', $post);\n    $post->delete();\n  }\n}`;
+    expect(laravelMissingAuthorizationMatcher.match(src, F)).toEqual([]);
+  });
+
+  it("missing-authorization is quiet with a FormRequest but not a plain Request", () => {
+    const withForm = `class C extends Controller {\n  public function store(StorePostRequest $request) {}\n}`;
+    const plain = `class C extends Controller {\n  public function store(Request $request) {}\n}`;
+    expect(laravelMissingAuthorizationMatcher.match(withForm, F)).toEqual([]);
+    expect(laravelMissingAuthorizationMatcher.match(plain, F).length).toBe(1);
+  });
+
+  it("livewire-filament is quiet for locked properties with authorization", () => {
+    const src = `class EditPost extends Component {\n  #[Locked]\n  public int $postId;\n  public function delete() { $this->authorize('delete', $p); }\n}`;
+    expect(laravelLivewireFilamentMatcher.match(src, "app/Livewire/EditPost.php")).toEqual([]);
+  });
+
+  it("livewire-filament flags unlocked property and unauthorized action", () => {
+    const src = `class EditPost extends Component {\n  public int $postId;\n  public function delete() { Post::find($this->postId)->delete(); }\n}`;
+    expect(laravelLivewireFilamentMatcher.match(src, "app/Livewire/EditPost.php").length).toBe(2);
+  });
+
+  it("unsafe-sinks ignores named redirects, safe unserialize, and ->exec methods", () => {
+    const src = `return redirect()->route('home');\nunserialize($p, ['allowed_classes' => false]);\n$pdo->exec($sql);`;
+    expect(laravelUnsafeSinksMatcher.match(src, F)).toEqual([]);
+  });
+
+  it("config-exposure ignores env-driven config and .env.example", () => {
+    const src = `'debug' => (bool) env('APP_DEBUG', false),\n'key' => env('APP_KEY'),\n'secure' => env('SESSION_SECURE_COOKIE'),`;
+    expect(laravelConfigExposureMatcher.match(src, "config/app.php")).toEqual([]);
+    expect(laravelConfigExposureMatcher.match("APP_DEBUG=true", ".env.example")).toEqual([]);
+    expect(laravelConfigExposureMatcher.match("DB_PASSWORD=", ".env")).toEqual([]);
   });
 });

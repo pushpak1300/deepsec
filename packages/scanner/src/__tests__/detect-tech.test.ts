@@ -69,6 +69,84 @@ describe("detectTech", () => {
     expect(tags).not.toContain("laravel");
   });
 
+  it("does not flag a non-Laravel repo that only uses laravel/pint for linting", () => {
+    write(
+      "composer.json",
+      JSON.stringify({
+        require: { "monolog/monolog": "^3" },
+        "require-dev": { "laravel/pint": "^1.0" },
+      }),
+    );
+    const tags = detectTech(tmpRoot).tags;
+    expect(tags).toContain("php");
+    expect(tags).not.toContain("laravel");
+  });
+
+  it("detects Laravel via artisan even without composer.json", () => {
+    write("artisan", "#!/usr/bin/env php\n");
+    const tags = detectTech(tmpRoot).tags;
+    expect(tags).toContain("laravel");
+    expect(tags).toContain("php");
+  });
+
+  it("does not treat a bare routes/web.php as Laravel", () => {
+    write("composer.json", JSON.stringify({ require: { "slim/slim": "^4" } }));
+    write("routes/web.php", "<?php $app->get('/', fn () => 'hi');");
+    expect(detectTech(tmpRoot).tags).not.toContain("laravel");
+  });
+
+  it("detects Laravel from composer.lock when composer.json lacks a direct dep", () => {
+    write("composer.json", JSON.stringify({ require: { "acme/laravel-wrapper": "^1.0" } }));
+    write(
+      "composer.lock",
+      JSON.stringify({
+        packages: [
+          { name: "acme/laravel-wrapper", version: "1.0.0" },
+          { name: "laravel/framework", version: "11.0.0" },
+        ],
+      }),
+    );
+    const tags = detectTech(tmpRoot).tags;
+    expect(tags).toContain("laravel");
+  });
+
+  it("does not flag a package that only requires other laravel/* packages", () => {
+    write("composer.json", JSON.stringify({ require: { "laravel/prompts": "^0.3", php: "^8.2" } }));
+    expect(detectTech(tmpRoot).tags).not.toContain("laravel");
+  });
+
+  it.each([
+    ["livewire", "livewire/livewire"],
+    ["nova", "laravel/nova"],
+    ["inertia", "inertiajs/inertia-laravel"],
+    ["sanctum", "laravel/sanctum"],
+    ["passport", "laravel/passport"],
+    ["telescope", "laravel/telescope"],
+    ["horizon", "laravel/horizon"],
+    ["cashier", "laravel/cashier"],
+    ["octane", "laravel/octane"],
+  ])("adds the %s tag for %s alongside laravel", (tag, pkg) => {
+    write("composer.json", JSON.stringify({ require: { "laravel/framework": "^11", [pkg]: "*" } }));
+    const tags = detectTech(tmpRoot).tags;
+    expect(tags).toContain("laravel");
+    expect(tags).toContain(tag);
+  });
+
+  it("does not add Laravel package tags for plain laravel/framework", () => {
+    write("composer.json", JSON.stringify({ require: { "laravel/framework": "^11" } }));
+    const tags = detectTech(tmpRoot).tags;
+    for (const t of ["livewire", "nova", "horizon", "telescope"]) expect(tags).not.toContain(t);
+  });
+
+  it("detects Livewire as a transitive dep via composer.lock", () => {
+    write("composer.json", JSON.stringify({ require: { "laravel/framework": "^11" } }));
+    write(
+      "composer.lock",
+      JSON.stringify({ packages: [{ name: "livewire/livewire", version: "3.0.0" }] }),
+    );
+    expect(detectTech(tmpRoot).tags).toContain("livewire");
+  });
+
   it("detects Django via manage.py + requirements.txt", () => {
     write("manage.py", "#!/usr/bin/env python\n");
     write("requirements.txt", "Django==5.0\nrequests==2.32\n");

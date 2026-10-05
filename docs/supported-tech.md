@@ -104,12 +104,20 @@ that single signal.
 ## PHP
 
 ### Laravel (`laravel`)
-- **Sentinel detection:** `composer.json` depends on `laravel/*`, or
-  `artisan` script present.
-- **Matchers:** `php-laravel-route` (gated).
-- **Prompt highlights:** mass assignment via `$request->all()`,
-  `DB::raw`/`whereRaw` SQL injection, `VerifyCsrfToken::$except` gaps,
-  Blade `{!! !!}` XSS, routes outside the `auth` middleware group.
+- **Sentinel detection:** `laravel/framework` in `composer.json` or
+  `composer.lock`, or `artisan` exists.
+- **Matchers:** `php-laravel-route`, `laravel-mass-assignment`,
+  `laravel-sql-raw`, `laravel-blade-xss`, `laravel-missing-authorization`,
+  `laravel-unsafe-sinks`, `laravel-config-exposure` (all gated), and
+  `laravel-livewire-filament` (gated on `livewire` or `nova`).
+- **Package tags:** `livewire`, `nova`, `inertia`,
+  `sanctum`, `passport`, `telescope`, `horizon`, `cashier`, `octane`
+  (direct or transitive via `composer.lock`).
+- **Prompt highlights:** mass assignment via `$guarded = []` or
+  `$request->all()`, `DB::raw`/`whereRaw` SQL injection, `VerifyCsrfToken::$except`
+  gaps, Blade `{!! !!}` XSS, controllers without authorization, routes
+  outside the `auth` middleware group, Livewire public properties, upload/SSRF/
+  open-redirect sinks, `APP_DEBUG` and open Telescope/Horizon.
 
 ### Other PHP detected
 `symfony`, `slim`, `yii`, `cakephp`, `codeigniter`, `wordpress`,
