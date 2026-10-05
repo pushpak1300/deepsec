@@ -115,16 +115,43 @@ describe("detectTech", () => {
     expect(detectTech(tmpRoot).tags).not.toContain("laravel");
   });
 
+  it("does not flag a package whose lockfile has laravel/framework only in packages-dev", () => {
+    write(
+      "composer.json",
+      JSON.stringify({
+        require: { "illuminate/support": "^11" },
+        "require-dev": { "orchestra/testbench": "^9" },
+      }),
+    );
+    write(
+      "composer.lock",
+      JSON.stringify({
+        packages: [{ name: "illuminate/support" }],
+        "packages-dev": [{ name: "laravel/framework" }, { name: "orchestra/testbench" }],
+      }),
+    );
+    expect(detectTech(tmpRoot).tags).not.toContain("laravel");
+  });
+
+  it("detects Laravel from composer.lock alone", () => {
+    write("composer.lock", JSON.stringify({ packages: [{ name: "laravel/framework" }] }));
+    expect(detectTech(tmpRoot).tags).toEqual(expect.arrayContaining(["php", "laravel"]));
+  });
+
+  it("falls back to composer.lock when composer.json is malformed", () => {
+    write("composer.json", "{ not json");
+    write("composer.lock", JSON.stringify({ packages: [{ name: "laravel/framework" }] }));
+    expect(detectTech(tmpRoot).tags).toContain("laravel");
+  });
+
+  it("detects WordPress from wp-config.php without composer.json", () => {
+    write("wp-config.php", "<?php define('DB_NAME', 'wp');");
+    expect(detectTech(tmpRoot).tags).toEqual(expect.arrayContaining(["php", "wordpress"]));
+  });
+
   it.each([
     ["livewire", "livewire/livewire"],
     ["nova", "laravel/nova"],
-    ["inertia", "inertiajs/inertia-laravel"],
-    ["sanctum", "laravel/sanctum"],
-    ["passport", "laravel/passport"],
-    ["telescope", "laravel/telescope"],
-    ["horizon", "laravel/horizon"],
-    ["cashier", "laravel/cashier"],
-    ["octane", "laravel/octane"],
   ])("adds the %s tag for %s alongside laravel", (tag, pkg) => {
     write("composer.json", JSON.stringify({ require: { "laravel/framework": "^11", [pkg]: "*" } }));
     const tags = detectTech(tmpRoot).tags;
@@ -135,7 +162,7 @@ describe("detectTech", () => {
   it("does not add Laravel package tags for plain laravel/framework", () => {
     write("composer.json", JSON.stringify({ require: { "laravel/framework": "^11" } }));
     const tags = detectTech(tmpRoot).tags;
-    for (const t of ["livewire", "nova", "horizon", "telescope"]) expect(tags).not.toContain(t);
+    for (const t of ["livewire", "nova"]) expect(tags).not.toContain(t);
   });
 
   it("detects Livewire as a transitive dep via composer.lock", () => {

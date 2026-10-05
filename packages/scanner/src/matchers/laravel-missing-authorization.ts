@@ -1,6 +1,5 @@
-import type { CandidateMatch } from "@deepsec/core";
 import type { MatcherPlugin } from "../types.js";
-import { isLaravelSkippablePath, unauthorizedActions } from "./laravel-utils.js";
+import { isLaravelSkippablePath, linesMatch, unauthorizedActions } from "./laravel-utils.js";
 import { regexMatcher } from "./utils.js";
 
 const MUTATING_ACTION = /public\s+function\s+(?:store|update|destroy|delete|edit|create)\s*\(/;
@@ -25,19 +24,12 @@ export const laravelMissingAuthorizationMatcher: MatcherPlugin = {
   match(content, filePath) {
     if (isLaravelSkippablePath(filePath)) return [];
 
-    const matches: CandidateMatch[] = [];
-    const hits = unauthorizedActions(content, MUTATING_ACTION);
-    if (hits.length > 0) {
-      const lines = content.split("\n");
-      matches.push({
-        vulnSlug: "laravel-missing-authorization",
-        lineNumbers: hits,
-        snippet: lines.slice(Math.max(0, hits[0] - 2), hits[0] + 3).join("\n"),
-        matchedPattern:
-          "Mutating controller action with no authorization (check route middleware and FormRequest)",
-      });
-    }
-    return matches.concat(
+    return linesMatch(
+      "laravel-missing-authorization",
+      content,
+      unauthorizedActions(content, MUTATING_ACTION),
+      "Mutating controller action with no authorization (check route middleware and FormRequest)",
+    ).concat(
       regexMatcher(
         "laravel-missing-authorization",
         [

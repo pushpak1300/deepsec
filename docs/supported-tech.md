@@ -104,15 +104,18 @@ that single signal.
 ## PHP
 
 ### Laravel (`laravel`)
-- **Sentinel detection:** `laravel/framework` in `composer.json` or
-  `composer.lock`, or `artisan` exists.
+- **Sentinel detection:** `laravel/framework` in `composer.json` or in the
+  runtime `packages` list of `composer.lock`, or `artisan` exists. A
+  package repo whose lockfile lists `laravel/framework` only under
+  `packages-dev` (for example, through `orchestra/testbench`) isn't tagged.
 - **Matchers:** `php-laravel-route`, `laravel-mass-assignment`,
   `laravel-sql-raw`, `laravel-blade-xss`, `laravel-missing-authorization`,
   `laravel-unsafe-sinks`, `laravel-config-exposure`, and
   `laravel-livewire-filament` (all gated).
-- **Package tags:** `livewire`, `nova`, `inertia`,
-  `sanctum`, `passport`, `telescope`, `horizon`, `cashier`, `octane`
-  (direct or transitive via `composer.lock`).
+  `laravel-livewire-filament` runs only when the `livewire` or `nova` tag is
+  present.
+- **Package tags:** `livewire` and `nova`, from `composer.json` or the
+  runtime `packages` list in `composer.lock`.
 - **Prompt highlights:** mass assignment via `$guarded = []` or
   `$request->all()`, `DB::raw`/`whereRaw` SQL injection, `VerifyCsrfToken::$except`
   gaps, Blade `{!! !!}` XSS, controllers without authorization, routes

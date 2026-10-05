@@ -128,21 +128,23 @@ const detectors: Detector[] = [
       ...((parsed?.["require-dev"] as Record<string, string>) ?? {}),
     };
     const keys = Object.keys(deps);
-    const has = (name: string) =>
-      keys.includes(name) ||
-      (!!lock && new RegExp(`"name"\\s*:\\s*"${name.replace(/[/-]/g, "\\$&")}"`).test(lock));
+    // Runtime packages only: `packages-dev` holds testbench's laravel/framework
+    // in every Laravel package repo.
+    let locked: string[] = [];
+    try {
+      const packages = lock
+        ? (JSON.parse(lock) as { packages?: { name?: string }[] }).packages
+        : [];
+      locked = (packages ?? []).flatMap((p) => (p.name ? [p.name] : []));
+    } catch {
+      // ignore malformed lockfile
+    }
+    const has = (name: string) => keys.includes(name) || locked.includes(name);
 
     if (has("laravel/framework") || exists(root, "artisan")) {
       tags.push("laravel");
       if (has("livewire/livewire")) tags.push("livewire");
       if (has("laravel/nova")) tags.push("nova");
-      if (has("inertiajs/inertia-laravel")) tags.push("inertia");
-      if (has("laravel/sanctum")) tags.push("sanctum");
-      if (has("laravel/passport")) tags.push("passport");
-      if (has("laravel/telescope")) tags.push("telescope");
-      if (has("laravel/horizon")) tags.push("horizon");
-      if (has("laravel/cashier") || has("laravel/cashier-paddle")) tags.push("cashier");
-      if (has("laravel/octane")) tags.push("octane");
     }
 
     if (keys.some((k) => k.startsWith("symfony/"))) tags.push("symfony");

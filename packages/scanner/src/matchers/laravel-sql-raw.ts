@@ -25,6 +25,7 @@ export const laravelSqlRawMatcher: MatcherPlugin = {
     `DB::select("SELECT * FROM users WHERE id = $id");`,
     `DB::statement('DROP TABLE ' . $table);`,
     `DB::raw($sql)`,
+    `DB::raw($request->input('col'))`,
     `$q->orderBy($request->input('sort'));`,
     `$q->pluck(request()->query('col'));`,
     `$q->orderBy(request('sort'));`,
@@ -41,7 +42,7 @@ export const laravelSqlRawMatcher: MatcherPlugin = {
         },
         {
           regex:
-            /\bDB::(?:raw|statement|select|insert|update|delete|unprepared)\s*\(\s*(?:"[^"]*\$|(?:'[^']*'|"[^"]*")\s*\.\s*\$|\$\w+\s*[,)])/,
+            /\bDB::(?:raw|statement|select|insert|update|delete|unprepared)\s*\(\s*(?:"[^"]*\$|(?:'[^']*'|"[^"]*")\s*\.\s*\$|\$|request\s*\()/,
           label: "DB facade raw SQL with interpolated/variable SQL (SQL injection)",
         },
         {

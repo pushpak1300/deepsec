@@ -142,7 +142,7 @@ end
     expect(matches.length).toBeGreaterThan(0);
   });
 
-  it("php-laravel-route detects Route::get and DB::raw", () => {
+  it("php-laravel-route detects route registrations and controllers", () => {
     const src = `<?php
 use Illuminate\\Support\\Facades\\Route;
 use Illuminate\\Support\\Facades\\DB;
@@ -319,5 +319,119 @@ describe("laravel matchers (negative cases)", () => {
     expect(laravelConfigExposureMatcher.match(src, "config/app.php")).toEqual([]);
     expect(laravelConfigExposureMatcher.match("APP_DEBUG=true", ".env.example")).toEqual([]);
     expect(laravelConfigExposureMatcher.match("DB_PASSWORD=", ".env")).toEqual([]);
+  });
+});
+
+describe("laravel matchers (edge cases)", () => {
+  const F = "app/Http/Controllers/PostController.php";
+  const labels = (ms: { matchedPattern: string }[]) => ms.map((m) => m.matchedPattern);
+
+  it("sql-raw flags DB facade calls with request or property input", () => {
+    for (const src of [
+      "DB::raw($request->input('col'))",
+      "DB::raw(request('col'))",
+      "DB::select($this->sql)",
+    ]) {
+      expect(laravelSqlRawMatcher.match(src, F).length).toBe(1);
+    }
+  });
+
+  it("mass-assignment flags two-step whole-request input once per line", () => {
+    const twoStep = laravelMassAssignmentMatcher.match(
+      "$data = $request->all();\nUser::create($data);",
+      F,
+    );
+    expect(twoStep.map((m) => m.lineNumbers)).toEqual([[1]]);
+    expect(laravelMassAssignmentMatcher.match("User::create($request->all());", F).length).toBe(1);
+  });
+
+  it("missing-authorization credits #[Authorize] to the method below it", () => {
+    const src = `class C extends Controller {\n  public function update(Post $p) {\n    $p->save();\n  }\n  #[Authorize('delete', 'post')]\n  public function destroy(Post $post) {\n    $post->delete();\n  }\n}`;
+    expect(laravelMissingAuthorizationMatcher.match(src, F)[0].lineNumbers).toEqual([2]);
+  });
+
+  it("missing-authorization ignores non-auth middleware and 404 aborts", () => {
+    const throttle = `class C extends Controller {\n  public function __construct() { $this->middleware('throttle:6,1'); }\n  public function destroy(Post $post) {\n    $post->delete();\n  }\n}`;
+    const notFound = `class C extends Controller {\n  public function destroy(Post $post) {\n    abort_if(!$post, 404);\n  }\n}`;
+    expect(laravelMissingAuthorizationMatcher.match(throttle, F).length).toBe(1);
+    expect(laravelMissingAuthorizationMatcher.match(notFound, F).length).toBe(1);
+  });
+
+  it("missing-authorization accepts 403 aborts and class-wide auth middleware", () => {
+    const forbidden = `class C extends Controller {\n  public function destroy(Post $post) {\n    abort_unless($post->user_id === auth()->id(), 403);\n  }\n}`;
+    const ctor = `class C extends Controller {\n  public function __construct() { $this->middleware('auth'); }\n  public function destroy(Post $post) {}\n}`;
+    const hasMiddleware = `class C extends Controller implements HasMiddleware {\n  public static function middleware(): array { return [new Middleware('can:manage-posts')]; }\n  public function destroy(Post $post) {}\n}`;
+    const resource = `class C extends Controller {\n  public function __construct() { $this->authorizeResource(Post::class); }\n  public function destroy(Post $post) {}\n}`;
+    for (const src of [forbidden, ctor, hasMiddleware, resource]) {
+      expect(laravelMissingAuthorizationMatcher.match(src, F)).toEqual([]);
+    }
+  });
+
+  it("livewire-filament flags Nova resources that only take NovaRequest", () => {
+    const src = `class Post extends Resource {\n  public function fields(NovaRequest $request) {\n    return [Text::make('Body')->asHtml()];\n  }\n}`;
+    expect(labels(laravelLivewireFilamentMatcher.match(src, "app/Nova/Post.php"))).toEqual([
+      "Admin Resource without policy/can*() overrides (verify a policy exists)",
+      "->html()/->asHtml() renders unescaped HTML (XSS)",
+    ]);
+  });
+
+  it("livewire-filament is quiet for resources with authorizedTo overrides", () => {
+    const src = `class Post extends Resource {\n  public function authorizedToDelete(Request $request) { return false; }\n}`;
+    expect(laravelLivewireFilamentMatcher.match(src, "app/Nova/Post.php")).toEqual([]);
+  });
+
+  it("livewire-filament skips model-typed and same-line locked properties", () => {
+    const src = `class EditPost extends Component {\n  public Post $post;\n  #[Locked] public int $postId;\n}`;
+    expect(laravelLivewireFilamentMatcher.match(src, "app/Http/Livewire/EditPost.php")).toEqual([]);
+  });
+
+  it("unsafe-sinks flags Redirect facade, Storage disks and response()->file", () => {
+    for (const src of [
+      "return Redirect::to($request->input('next'));",
+      "Storage::disk('s3')->get($request->input('path'));",
+      "return response()->file(request('path'));",
+    ]) {
+      expect(laravelUnsafeSinksMatcher.match(src, F).length).toBe(1);
+    }
+  });
+
+  it("config-exposure skips empty $except stubs and TrimStrings", () => {
+    const stub = `class VerifyCsrfToken extends Middleware {\n  protected $except = [\n    //\n  ];\n}`;
+    const trim = `class TrimStrings extends Middleware {\n  protected $except = [\n    'password',\n  ];\n}`;
+    expect(
+      laravelConfigExposureMatcher.match(stub, "app/Http/Middleware/VerifyCsrfToken.php"),
+    ).toEqual([]);
+    expect(laravelConfigExposureMatcher.match(trim, "app/Http/Middleware/TrimStrings.php")).toEqual(
+      [],
+    );
+  });
+
+  it("config-exposure flags a multi-line non-empty $except list", () => {
+    const src = `class VerifyCsrfToken extends Middleware {\n  protected $except = [\n    'stripe/*',\n  ];\n}`;
+    const [hit] = laravelConfigExposureMatcher.match(
+      src,
+      "app/Http/Middleware/VerifyCsrfToken.php",
+    );
+    expect(hit.lineNumbers).toEqual([2]);
+  });
+
+  it("config-exposure reports an open dashboard gate once and catches ::auth callbacks", () => {
+    const P = "app/Providers/HorizonServiceProvider.php";
+    expect(
+      labels(
+        laravelConfigExposureMatcher.match("Gate::define('viewHorizon', fn ($user) => true);", P),
+      ),
+    ).toEqual(["Telescope/Horizon/Pulse dashboard open to everyone"]);
+    expect(
+      laravelConfigExposureMatcher.match("Horizon::auth(function ($request) { return true; });", P)
+        .length,
+    ).toBe(1);
+  });
+
+  it("php-laravel-route sentinel accepts laravel/framework and artisan only", () => {
+    const accept = phpLaravelRouteMatcher.requires?.sentinelContains;
+    expect(accept?.("composer.json", '{"require":{"laravel/framework":"^11"}}')).toBe(true);
+    expect(accept?.("artisan", "")).toBe(true);
+    expect(accept?.("composer.json", '{"require":{"laravel/prompts":"^0.3"}}')).toBe(false);
   });
 });

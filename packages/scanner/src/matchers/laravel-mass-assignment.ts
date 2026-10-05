@@ -24,6 +24,7 @@ export const laravelMassAssignmentMatcher: MatcherPlugin = {
     `User::create($request->all());`,
     `$user->update($request->input());`,
     `$post->fill(request()->all());`,
+    `$data = $request->all();`,
   ],
   match(content, filePath) {
     if (isLaravelSkippablePath(filePath)) return [];
@@ -44,6 +45,12 @@ export const laravelMassAssignmentMatcher: MatcherPlugin = {
             String.raw`(?:::|->)(?:create|updateOrCreate|firstOrCreate|firstOrNew|insert|upsert|update|fill)\s*\(\s*${ALL_INPUT}`,
           ),
           label: "Whole-request input into create/update/fill (mass assignment)",
+        },
+        {
+          regex: new RegExp(
+            String.raw`^(?!.*(?:::|->)(?:create|updateOrCreate|firstOrCreate|firstOrNew|insert|upsert|update|fill)\s*\().*${ALL_INPUT}`,
+          ),
+          label: "Whole-request input captured (check where it flows)",
         },
       ],
       content,

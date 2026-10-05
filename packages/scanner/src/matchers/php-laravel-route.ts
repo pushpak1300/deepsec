@@ -1,4 +1,5 @@
 import type { MatcherPlugin } from "../types.js";
+import { isLaravelSkippablePath } from "./laravel-utils.js";
 import { regexMatcher } from "./utils.js";
 
 /**
@@ -15,7 +16,7 @@ export const phpLaravelRouteMatcher: MatcherPlugin = {
     tech: ["laravel"],
     sentinelFiles: ["composer.json", "artisan"],
     sentinelContains: (path, content) =>
-      path === "artisan" || /"laravel\/(?:lumen-)?framework"\s*:/.test(content),
+      path === "artisan" || /"laravel\/framework"\s*:/.test(content),
   },
   examples: [
     `Route::get('/users', [UsersController::class, 'index']);`,
@@ -27,7 +28,7 @@ export const phpLaravelRouteMatcher: MatcherPlugin = {
     `Route::get('/me', fn () => auth()->user())->middleware('auth:sanctum');`,
   ],
   match(content, filePath) {
-    if (/\/(tests|vendor)\//.test(filePath)) return [];
+    if (isLaravelSkippablePath(filePath)) return [];
 
     return regexMatcher(
       "php-laravel-route",
