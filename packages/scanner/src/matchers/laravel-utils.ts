@@ -14,7 +14,7 @@ export function isLaravelSkippablePath(filePath: string): boolean {
 const AUTH_MARKER =
   /\bauthorize\w*\s*\(|\bGate::|->(?:can|cannot)\s*\(|\bauthorizeResource\b|\bmiddleware\s*\(\s*['"](?:can:|auth)|#\[Authorize|\babort_(?:if|unless)\s*\([^;]*(?:\b403\b|->can\b|Gate::)|\b(?!Request\b)\w+Request\s+\$/;
 
-export function hasAuthMarker(content: string): boolean {
+function hasAuthMarker(content: string): boolean {
   return AUTH_MARKER.test(content);
 }
 
