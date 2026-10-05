@@ -108,8 +108,8 @@ that single signal.
   `composer.lock`, or `artisan` exists.
 - **Matchers:** `php-laravel-route`, `laravel-mass-assignment`,
   `laravel-sql-raw`, `laravel-blade-xss`, `laravel-missing-authorization`,
-  `laravel-unsafe-sinks`, `laravel-config-exposure` (all gated), and
-  `laravel-livewire-filament` (gated on `livewire` or `nova`).
+  `laravel-unsafe-sinks`, `laravel-config-exposure`, and
+  `laravel-livewire-filament` (all gated).
 - **Package tags:** `livewire`, `nova`, `inertia`,
   `sanctum`, `passport`, `telescope`, `horizon`, `cashier`, `octane`
   (direct or transitive via `composer.lock`).

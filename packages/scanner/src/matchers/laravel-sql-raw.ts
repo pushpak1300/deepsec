@@ -5,7 +5,7 @@ import { regexMatcher } from "./utils.js";
 const RAW_METHODS =
   "whereRaw|orWhereRaw|havingRaw|orHavingRaw|orderByRaw|groupByRaw|selectRaw|fromRaw|joinRaw";
 const TAINTED_ARG = String.raw`(?:"[^"]*\$|(?:'[^']*'|"[^"]*")\s*\.\s*\$|\$)`;
-const REQ = String.raw`(?:\$request->|request\s*\(\s*\)->)`;
+const REQ = String.raw`(?:\$request->|request\s*\()`;
 
 /**
  * Laravel query-builder and DB-facade raw SQL with interpolated input, plus
@@ -27,6 +27,7 @@ export const laravelSqlRawMatcher: MatcherPlugin = {
     `DB::raw($sql)`,
     `$q->orderBy($request->input('sort'));`,
     `$q->pluck(request()->query('col'));`,
+    `$q->orderBy(request('sort'));`,
     `$q->where($request->input('field'), $request->input('value'));`,
   ],
   match(content, filePath) {
@@ -50,7 +51,7 @@ export const laravelSqlRawMatcher: MatcherPlugin = {
           label: "Request-controlled column/identifier (SQL injection; bindings don't apply)",
         },
         {
-          regex: new RegExp(String.raw`->where\s*\(\s*${REQ}(?:input|get|query)\s*\(`),
+          regex: /->where\s*\(\s*(?:\$request->(?:input|get|query)\s*\(|request\s*\()/,
           label: "Request-controlled where() column name",
         },
       ],

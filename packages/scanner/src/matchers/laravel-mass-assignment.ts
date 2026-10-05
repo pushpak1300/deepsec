@@ -17,6 +17,7 @@ export const laravelMassAssignmentMatcher: MatcherPlugin = {
   examples: [
     `protected $guarded = [];`,
     `Model::unguard();`,
+    `User::unguard();`,
     `Model::unguarded(fn () => User::create($data));`,
     `$user->forceFill($data)->save();`,
     `User::forceCreate($data);`,
@@ -31,7 +32,7 @@ export const laravelMassAssignmentMatcher: MatcherPlugin = {
       [
         { regex: /\$guarded\s*=\s*\[\s*\]/, label: "$guarded = [] (every attribute assignable)" },
         {
-          regex: /\bModel::unguard(?:ed)?\s*\(/,
+          regex: /\b\w+::unguard(?:ed)?\s*\(/,
           label: "Model::unguard (disables mass-assignment protection)",
         },
         {

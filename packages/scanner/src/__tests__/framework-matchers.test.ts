@@ -283,6 +283,22 @@ describe("laravel matchers (negative cases)", () => {
     expect(laravelMissingAuthorizationMatcher.match(plain, F).length).toBe(1);
   });
 
+  it("missing-authorization checks each action, not the whole file", () => {
+    const src = `class PostController extends Controller {\n  public function store(StorePostRequest $request) {}\n  public function destroy(Post $post) {\n    $post->delete();\n  }\n}`;
+    const [hit] = laravelMissingAuthorizationMatcher.match(src, F);
+    expect(hit.lineNumbers).toEqual([3]);
+  });
+
+  it("missing-authorization ignores a bare Policy import", () => {
+    const src = `use App\\Policies\\PostPolicy;\nclass C extends Controller {\n  public function destroy(Post $post) {}\n}`;
+    expect(laravelMissingAuthorizationMatcher.match(src, F).length).toBe(1);
+  });
+
+  it("livewire-filament flags untyped public identity properties", () => {
+    const src = `class EditPost extends Component {\n  public $postId;\n}`;
+    expect(laravelLivewireFilamentMatcher.match(src, "app/Livewire/EditPost.php").length).toBe(1);
+  });
+
   it("livewire-filament is quiet for locked properties with authorization", () => {
     const src = `class EditPost extends Component {\n  #[Locked]\n  public int $postId;\n  public function delete() { $this->authorize('delete', $p); }\n}`;
     expect(laravelLivewireFilamentMatcher.match(src, "app/Livewire/EditPost.php")).toEqual([]);

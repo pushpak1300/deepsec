@@ -1,10 +1,10 @@
 import type { CandidateMatch } from "@deepsec/core";
 import type { MatcherPlugin } from "../types.js";
-import { hasAuthMarker, isLaravelSkippablePath } from "./laravel-utils.js";
+import { hasAuthMarker, isLaravelSkippablePath, unauthorizedActions } from "./laravel-utils.js";
 import { regexMatcher } from "./utils.js";
 
 const IDENTITY_PROP =
-  /^\s*public\s+\??(?:int|string|[A-Z]\w*)\s+\$(?:\w*Id|id|\w*_id|user|post|team|order|account)\b/;
+  /^\s*public\s+(?:\??(?:int|string|[A-Z]\w*)\s+)?\$(?:\w*Id|id|\w*_id|user|post|team|order|account)\b/;
 const ACTION =
   /public\s+function\s+(?:delete|update|save|destroy|remove|approve|publish|impersonate)\w*\s*\(/;
 const RESOURCE_AUTH = /\bcan(?:ViewAny|View|Create|Edit|Delete)\b|\bauthorizedTo\w+/;
@@ -25,7 +25,7 @@ export const laravelLivewireFilamentMatcher: MatcherPlugin = {
     "**/app/Filament/**/*.php",
     "**/app/Nova/**/*.php",
   ],
-  requires: { tech: ["livewire", "nova"] },
+  requires: { tech: ["laravel"] },
   examples: [
     `class EditPost extends Component {\n  public int $postId;\n  public function delete() { Post::find($this->postId)->delete(); }\n}`,
     `class PostResource extends Resource { protected static ?string $model = Post::class; }`,
@@ -56,9 +56,10 @@ export const laravelLivewireFilamentMatcher: MatcherPlugin = {
         ),
         "Public Livewire property is client-writable (add #[Locked] and re-authorize)",
       );
-      if (!hasAuthMarker(content)) {
-        add(find(ACTION), "Livewire action with no in-file authorization (public endpoint)");
-      }
+      add(
+        unauthorizedActions(content, ACTION),
+        "Livewire action with no authorization (public endpoint)",
+      );
     }
     if (
       /class\s+\w+\s+extends\s+Resource\b/.test(content) &&
